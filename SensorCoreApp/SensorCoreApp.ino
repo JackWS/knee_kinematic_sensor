@@ -1,37 +1,75 @@
-/*
-  Blink
+//-------------------------------------------------------------------------------
+//  TinyCircuits ST BLE TinyShield UART Example Sketch
+//  Last Updated 2 March 2016
+//
+//  This demo sets up the BlueNRG-MS chipset of the ST BLE module for compatiblity 
+//  with Nordic's virtual UART connection, and can pass data between the Arduino
+//  serial monitor and Nordic nRF UART V2.0 app or another compatible BLE
+//  terminal. This example is written specifically to be fairly code compatible
+//  with the Nordic NRF8001 example, with a replacement UART.ino file with
+//  'aci_loop' and 'BLEsetup' functions to allow easy replacement. 
+//
+//  Written by Ben Rose, TinyCircuits http://tinycircuits.com
+//
+//-------------------------------------------------------------------------------
 
-  Turns an LED on for one second, then off for one second, repeatedly.
 
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino
-  model, check the Technical Specs of your board at:
-  https://www.arduino.cc/en/Main/Products
+#include <SPI.h>
+#include <STBLE.h>
 
-  modified 8 May 2014
-  by Scott Fitzgerald
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-  modified 8 Sep 2016
-  by Colby Newman
 
-  This example code is in the public domain.
+//Debug output adds extra flash and memory requirements!
+#ifndef BLE_DEBUG
+#define BLE_DEBUG true
+#endif
 
-  http://www.arduino.cc/en/Tutorial/Blink
-*/
+#if defined (ARDUINO_ARCH_AVR)
+#define SerialMonitorInterface Serial
+#elif defined(ARDUINO_ARCH_SAMD)
+#define SerialMonitorInterface SerialUSB
+#endif
 
-// the setup function runs once when you press reset or power the board
+
+uint8_t ble_rx_buffer[21];
+uint8_t ble_rx_buffer_len = 0;
+uint8_t ble_connection_state = false;
+#define PIPE_UART_OVER_BTLE_UART_TX_TX 0
+
 void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
-  pinMode(LED_BUILTIN, OUTPUT);
+  SerialMonitorInterface.begin(9600);
+  while (!SerialMonitorInterface); //This line will block until a serial monitor is opened with TinyScreen+!
+  BLEsetup();
 }
 
-// the loop function runs over and over again forever
+
 void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  delay(200);                       // wait for a second
-  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-  delay(200);                       // wait for a second
+  aci_loop();//Process any ACI commands or events from the NRF8001- main BLE handler, must run often. Keep main loop short.
+  if (ble_rx_buffer_len) {//Check if data is available
+    SerialMonitorInterface.print(ble_rx_buffer_len);
+    SerialMonitorInterface.print(" : ");
+    SerialMonitorInterface.println((char*)ble_rx_buffer);
+    ble_rx_buffer_len = 0;//clear afer reading
+  }
+  if (SerialMonitorInterface.available()) {//Check if serial input is available to send
+    delay(10);//should catch input
+    uint8_t sendBuffer[21];
+    uint8_t sendLength = 0;
+    while (SerialMonitorInterface.available() && sendLength < 19) {
+      sendBuffer[sendLength] = SerialMonitorInterface.read();
+      sendLength++;
+    }
+    if (SerialMonitorInterface.available()) {
+      SerialMonitorInterface.print(F("Input truncated, dropped: "));
+      if (SerialMonitorInterface.available()) {
+        SerialMonitorInterface.write(SerialMonitorInterface.read());
+      }
+    }
+    sendBuffer[sendLength] = '\0'; //Terminate string
+    sendLength++;
+    if (!lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t*)sendBuffer, sendLength))
+    {
+      SerialMonitorInterface.println(F("TX dropped!"));
+    }
+  }
 }
+

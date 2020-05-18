@@ -42,13 +42,13 @@ int BLEsetup() {
   }
 
   uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
-  ret = aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, 0x07, &service_handle, &dev_name_char_handle, &appearance_char_handle);
+  ret = aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, 0x0A, &service_handle, &dev_name_char_handle, &appearance_char_handle);
 
   if (ret) {
     PRINTF("GAP_Init failed.\n");
   }
 
-  const char *name = "BlueNRG";
+  const char *name = "KneeSensor";
 
   ret = aci_gatt_update_char_value(service_handle, dev_name_char_handle, 0, strlen(name), (uint8_t *)name);
 

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "bluenrg_aci_const.h": "c",
+        "bluenrg_hal_aci.h": "c",
+        "bluenrg_gatt_server.h": "c"
+    }
+}

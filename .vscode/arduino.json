@@ -1,0 +1,7 @@
+{
+    "sketch": "SensorCoreApp\\SensorCoreApp.ino",
+    "port": "COM5",
+    "board": "TinyCircuits:samd:tinyzero",
+    "configuration": "BuildOption=normal",
+    "programmer": "AVR ISP"
+}
