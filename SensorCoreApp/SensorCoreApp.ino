@@ -53,13 +53,17 @@ uint8_t ble_rx_buffer_len = 0;
 uint8_t ble_connection_state = false;
 #define PIPE_UART_OVER_BTLE_UART_TX_TX 0
 
+bool gyroBiasValid = false;
+
 void setup()
 {
   int errcode;
 
   SerialMonitorInterface.begin(SERIAL_PORT_SPEED);
+  /*
   while (!SerialMonitorInterface)
     ; //This line will block until a serial monitor is opened with TinyScreen+!
+  */
   BLEsetup();
 
   Wire.begin();
@@ -93,10 +97,13 @@ void setup()
   fusion.setGyroEnable(true);
   fusion.setAccelEnable(true);
   fusion.setCompassEnable(true);
+
+  gyroBiasValid = false;
 }
 
 void loop()
 {
+
   unsigned long now = millis();
   unsigned long delta;
 
@@ -108,6 +115,7 @@ void loop()
     SerialMonitorInterface.println((char *)ble_rx_buffer);
     ble_rx_buffer_len = 0; //clear afer reading
   }
+
   if (SerialMonitorInterface.available())
   {            //Check if serial input is available to send
     delay(10); //should catch input
@@ -116,7 +124,6 @@ void loop()
     while (SerialMonitorInterface.available() && sendLength < (buffer_size - 2))
     {
       sendBuffer[sendLength] = SerialMonitorInterface.read();
-      SerialMonitorInterface.print(sendBuffer[sendLength]);
       sendLength++;
     }
     SerialMonitorInterface.println();
@@ -141,28 +148,37 @@ void loop()
     }
   }
 
-  if (imu->IMURead())
+  if (ble_connection_state && imu->IMURead())
   { // get the latest data if ready yet
     fusion.newIMUData(imu->getGyro(), imu->getAccel(), imu->getCompass(), imu->getTimestamp());
     sampleCount++;
-    /*if ((delta = now - lastRate) >= 1000)
-    {
-      SerialMonitor.print("Sample rate: "); SerialMonitor.print(sampleCount);
-      if (imu->IMUGyroBiasValid())
-        SerialMonitor.println(", gyro bias valid");
-      else
-        SerialMonitor.println(", calculating gyro bias - don't move IMU!!");
-
-      sampleCount = 0;
-      lastRate = now;
-    }*/
     if ((delta = now - lastRate) >= 900)
     {
+
+      String calibrationMsg = "";
+      if (!imu->IMUGyroBiasValid())
+      {
+        gyroBiasValid = false;
+        calibrationMsg = ">Calibrating Gyro";
+        sendMessage(calibrationMsg);
+        calibrationMsg = ">Don't move IMU!";
+        sendMessage(calibrationMsg);
+      }
+      else
+      {
+        if (!gyroBiasValid)
+        {
+          calibrationMsg.concat("Gyro bias valid");
+          sendMessage(calibrationMsg);
+          gyroBiasValid = true;
+        }
+      }
+
       sampleCount = 0;
       lastRate = now;
     }
 
-    if ((now - lastDisplay) >= DISPLAY_INTERVAL)
+    if (gyroBiasValid && (now - lastDisplay) >= DISPLAY_INTERVAL)
     {
       lastDisplay = now;
       RTVector3 accelData = imu->getAccel();
@@ -170,6 +186,7 @@ void loop()
       RTVector3 compassData = imu->getCompass();
       RTVector3 fusionData = fusion.getFusionPose();
 
+      /*
       SerialMonitorInterface.print("C");
       SerialMonitorInterface.print(sampleCount);
       SerialMonitorInterface.print("S0");
@@ -179,7 +196,7 @@ void loop()
       SerialMonitorInterface.print("F");
       displayDegrees(fusionData.x(), fusionData.y(), fusionData.z()); // fused output
       SerialMonitorInterface.println();
-
+*/
       String msg = "";
       msg.concat("C");
       msg.concat(sampleCount);
@@ -198,16 +215,18 @@ void loop()
       msg.concat(fusionData.y());
       msg.concat(fusionData.z());
 
+      sendMessage(msg);
+
       //msg.concat("T3260S0x-0.21y-0.90z0.32x0.01y0.00z-0.01x450.45y-247.57z-450.43Fx-70.23y12.19z47.91");
       //msg.concat("message");
 
       //SerialMonitorInterface.println(msg);
-
+      /*
       //uint8_t *sendBuffer[];
       uint8_t sendBuffer[msg.length() + 1];
       //sendBuffer = msg.toCharArray();
       msg.getBytes(sendBuffer, msg.length() + 1);
-
+*/
       //uint8_t sendBuffer[16] = {66, 127, 164, 72, 68, 158, 148, 255, 23, 36, 226, 192, 198, 248, 251, 221};
       /*uint8_t sendBuffer[10] = {0};
       sendBuffer[0] = 'A';
@@ -222,7 +241,7 @@ void loop()
       sendBuffer[9] = 'J';
 */
       //SerialMonitorInterface.println((char *)sendBuffer);
-
+      /*
       uint8_t sentLength = 0;
       int sizeSendBuffer = sizeof(sendBuffer);
       while (sentLength < sizeSendBuffer)
@@ -291,6 +310,38 @@ void loop()
       }*/
     }
   }
+}
+
+void sendMessage(String msg)
+{
+  uint8_t sendBuffer[msg.length() + 1];
+  msg.getBytes(sendBuffer, msg.length() + 1);
+
+  uint8_t sentLength = 0;
+  int sizeSendBuffer = sizeof(sendBuffer);
+  while (sentLength < sizeSendBuffer)
+  {
+    int arraySize = buffer_size - 2;
+    if ((sizeSendBuffer > sentLength) && ((sizeSendBuffer - sentLength) < (buffer_size - 2)))
+    {
+      arraySize = (sizeSendBuffer - sentLength);
+    }
+    uint8_t sendBufferTruncated[arraySize] = {};
+
+    uint8_t sendLength = 0;
+    while (sendLength < arraySize)
+    {
+      sendBufferTruncated[sendLength] = sendBuffer[sentLength];
+      sendLength++;
+      sentLength++;
+    }
+    sendBufferTruncated[sendLength] = '\0'; //Terminate string
+    sendLength++;
+
+    lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t *)sendBufferTruncated, sendLength);
+  }
+  SerialMonitorInterface.print("SENT> ");
+  SerialMonitorInterface.println(msg);
 }
 
 void displayAxis(float x, float y, float z)
