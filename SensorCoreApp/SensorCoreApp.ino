@@ -25,7 +25,7 @@ RTIMU *imu;             // the IMU object
 RTFusionRTQF fusion;    // the fusion object
 RTIMUSettings settings; // the settings object
 //  DISPLAY_INTERVAL sets the rate at which results are displayed
-#define DISPLAY_INTERVAL 500 // interval between pose displays
+#define DISPLAY_INTERVAL 150 // interval between pose displays
 //  SERIAL_PORT_SPEED defines the speed to use for the debug serial port
 #define SERIAL_PORT_SPEED 115200
 unsigned long lastDisplay;
@@ -119,7 +119,7 @@ void loop()
       SerialMonitorInterface.print(sendBuffer[sendLength]);
       sendLength++;
     }
-      SerialMonitorInterface.println();
+    SerialMonitorInterface.println();
 
     if (SerialMonitorInterface.available())
     {
@@ -145,14 +145,19 @@ void loop()
   { // get the latest data if ready yet
     fusion.newIMUData(imu->getGyro(), imu->getAccel(), imu->getCompass(), imu->getTimestamp());
     sampleCount++;
-    if ((delta = now - lastRate) >= 1000)
+    /*if ((delta = now - lastRate) >= 1000)
     {
-      /*SerialMonitor.print("Sample rate: "); SerialMonitor.print(sampleCount);
+      SerialMonitor.print("Sample rate: "); SerialMonitor.print(sampleCount);
       if (imu->IMUGyroBiasValid())
         SerialMonitor.println(", gyro bias valid");
       else
-        SerialMonitor.println(", calculating gyro bias - don't move IMU!!");*/
+        SerialMonitor.println(", calculating gyro bias - don't move IMU!!");
 
+      sampleCount = 0;
+      lastRate = now;
+    }*/
+    if ((delta = now - lastRate) >= 900)
+    {
       sampleCount = 0;
       lastRate = now;
     }
@@ -165,7 +170,6 @@ void loop()
       RTVector3 compassData = imu->getCompass();
       RTVector3 fusionData = fusion.getFusionPose();
 
-      /*
       SerialMonitorInterface.print("C");
       SerialMonitorInterface.print(sampleCount);
       SerialMonitorInterface.print("S0");
@@ -175,9 +179,9 @@ void loop()
       SerialMonitorInterface.print("F");
       displayDegrees(fusionData.x(), fusionData.y(), fusionData.z()); // fused output
       SerialMonitorInterface.println();
-*/
+
       String msg = "";
-      /*msg.concat("C");
+      msg.concat("C");
       msg.concat(sampleCount);
       msg.concat("S0");
       msg.concat(accelData.x());
@@ -193,40 +197,58 @@ void loop()
       msg.concat(fusionData.x());
       msg.concat(fusionData.y());
       msg.concat(fusionData.z());
-      */
+
       //msg.concat("T3260S0x-0.21y-0.90z0.32x0.01y0.00z-0.01x450.45y-247.57z-450.43Fx-70.23y12.19z47.91");
-      msg.concat("message");
+      //msg.concat("message");
 
       //SerialMonitorInterface.println(msg);
 
       //uint8_t *sendBuffer[];
-      //uint8_t sendBuffer[msg.length()];
+      uint8_t sendBuffer[msg.length() + 1];
       //sendBuffer = msg.toCharArray();
-      //msg.getBytes(sendBuffer, msg.length());
+      msg.getBytes(sendBuffer, msg.length() + 1);
 
-      uint8_t sendBuffer[msg.length()];
-      sendBuffer[sizeof(sendBuffer)-1] = 'm';
-      sendBuffer[sizeof(sendBuffer)-1] = 'm';
-
-      SerialMonitorInterface.println((char *)sendBuffer);
+      //uint8_t sendBuffer[16] = {66, 127, 164, 72, 68, 158, 148, 255, 23, 36, 226, 192, 198, 248, 251, 221};
+      /*uint8_t sendBuffer[10] = {0};
+      sendBuffer[0] = 'A';
+      sendBuffer[1] = 'B';
+      sendBuffer[2] = 'C';
+      sendBuffer[3] = 'D';
+      sendBuffer[4] = 'E';
+      sendBuffer[5] = 'F';
+      sendBuffer[6] = 'G';
+      sendBuffer[7] = 'H';
+      sendBuffer[8] = 'I';
+      sendBuffer[9] = 'J';
+*/
+      //SerialMonitorInterface.println((char *)sendBuffer);
 
       uint8_t sentLength = 0;
-      while (sentLength < sizeof(sendBuffer))
+      int sizeSendBuffer = sizeof(sendBuffer);
+      while (sentLength < sizeSendBuffer)
       {
-        uint8_t sendBufferTruncated[buffer_size];
-        uint8_t sendLength = 0;
-        while (sendLength < (buffer_size - 2))
+        int arraySize = buffer_size - 2;
+        if ((sizeSendBuffer > sentLength) && ((sizeSendBuffer - sentLength) < (buffer_size - 2)))
         {
-          sendBuffer[sendLength] = (uint8_t) sendBuffer[sentLength];
-          SerialMonitorInterface.print(sendBuffer[sendLength]);
+          arraySize = (sizeSendBuffer - sentLength);
+        }
+        uint8_t sendBufferTruncated[arraySize] = {};
+
+        //SerialMonitorInterface.println((char *)sendBufferTruncated);
+
+        uint8_t sendLength = 0;
+        while (sendLength < arraySize)
+        {
+          sendBufferTruncated[sendLength] = sendBuffer[sentLength];
           sendLength++;
           sentLength++;
         }
-        sendBuffer[sendLength] = '\0'; //Terminate string
+        sendBufferTruncated[sendLength] = '\0'; //Terminate string
         sendLength++;
+        //SerialMonitorInterface.print((char *)sendBufferTruncated);
 
         lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t *)sendBufferTruncated, sendLength);
-        SerialMonitorInterface.println();
+        //SerialMonitorInterface.println();
       }
 
       /*if (!lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t *)sendBuffer, sendLength))
@@ -283,10 +305,18 @@ void displayAxis(float x, float y, float z)
 
 void displayDegrees(float x, float y, float z)
 {
+  /*
   //SerialMonitorInterface.print("x");
   SerialMonitorInterface.print(x * RTMATH_RAD_TO_DEGREE);
   //SerialMonitorInterface.print("y");
   SerialMonitorInterface.print(y * RTMATH_RAD_TO_DEGREE);
   //SerialMonitorInterface.print("z");
   SerialMonitorInterface.print(z * RTMATH_RAD_TO_DEGREE);
+  */
+  //SerialMonitorInterface.print("x");
+  SerialMonitorInterface.print(x);
+  //SerialMonitorInterface.print("y");
+  SerialMonitorInterface.print(y);
+  //SerialMonitorInterface.print("z");
+  SerialMonitorInterface.print(z);
 }
