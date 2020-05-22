@@ -46,7 +46,7 @@ int sampleCount;
 #define SerialMonitorInterface SerialUSB
 #endif
 
-#define buffer_size 21 // must be 21?
+#define buffer_size 19 // must be 21?
 
 uint8_t ble_rx_buffer[buffer_size];
 uint8_t ble_rx_buffer_len = 0;
@@ -136,8 +136,8 @@ void loop()
         SerialMonitorInterface.write(SerialMonitorInterface.read());
       }
     }
-    sendBuffer[sendLength] = '\0'; //Terminate string
-    sendLength++;
+    //sendBuffer[sendLength] = '\0'; //Terminate string
+    //sendLength++;
     if (!lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t *)sendBuffer, sendLength))
     {
       //SerialMonitorInterface.println(F("TX dropped!"));
@@ -168,7 +168,7 @@ void loop()
       {
         if (!gyroBiasValid)
         {
-          calibrationMsg.concat("Gyro bias valid");
+          calibrationMsg.concat(">Gyro bias valid");
           sendMessage(calibrationMsg);
           gyroBiasValid = true;
         }
@@ -214,6 +214,7 @@ void loop()
       msg.concat(fusionData.x());
       msg.concat(fusionData.y());
       msg.concat(fusionData.z());
+      msg.concat("#");
 
       sendMessage(msg);
 
@@ -314,18 +315,99 @@ void loop()
 
 void sendMessage(String msg)
 {
-  uint8_t sendBuffer[msg.length() + 1];
+  uint8_t sendBuffer[msg.length() + 1] = {};
   msg.getBytes(sendBuffer, msg.length() + 1);
 
   uint8_t sentLength = 0;
   int sizeSendBuffer = sizeof(sendBuffer);
+
+  /*
+  SerialMonitorInterface.println("----------------------------------------------");
+  SerialMonitorInterface.print("MSG> ");
+  SerialMonitorInterface.print(msg);
+  SerialMonitorInterface.println();
+  SerialMonitorInterface.print("msg.length> ");
+  SerialMonitorInterface.print(msg.length());
+  SerialMonitorInterface.println();
+  SerialMonitorInterface.print("sizeSendBuffer> ");
+  SerialMonitorInterface.print(sizeSendBuffer);
+  SerialMonitorInterface.println();
+  SerialMonitorInterface.println("----------------------------------------------");
+  SerialMonitorInterface.print(" last> ");
+  SerialMonitorInterface.print(sendBuffer[sizeSendBuffer - 1]);
+  SerialMonitorInterface.println();
+  SerialMonitorInterface.print(" last-c> ");
+  SerialMonitorInterface.print((char)sendBuffer[sizeSendBuffer - 1]);
+  SerialMonitorInterface.println();
+  */
+
   while (sentLength < sizeSendBuffer)
   {
-    int arraySize = buffer_size - 2;
-    if ((sizeSendBuffer > sentLength) && ((sizeSendBuffer - sentLength) < (buffer_size - 2)))
+    int arraySize = buffer_size;
+    if ((sizeSendBuffer - sentLength) < buffer_size)
+    {
+/*
+      SerialMonitorInterface.print(" sizeSendBuffer> ");
+      SerialMonitorInterface.print(sizeSendBuffer);
+      SerialMonitorInterface.print(" sentLength> ");
+      SerialMonitorInterface.print(sentLength);
+      SerialMonitorInterface.println();
+*/
+      arraySize = (sizeSendBuffer - sentLength);
+    }
+/*
+    SerialMonitorInterface.print("SIZE> ");
+    SerialMonitorInterface.print(arraySize);
+    SerialMonitorInterface.print(" > ");
+    SerialMonitorInterface.println();
+*/
+    uint8_t sendBufferTruncated[arraySize] = {};
+
+    uint8_t sendLength = 0;
+    while (sendLength < arraySize)
+    {
+      if (sendBuffer[sentLength] != 0)
+      {
+/*
+        SerialMonitorInterface.print(" sendLength> ");
+        SerialMonitorInterface.print(sendLength);
+        SerialMonitorInterface.print(" sentLength> ");
+        SerialMonitorInterface.print(sentLength);
+        SerialMonitorInterface.print(" byte> ");
+        SerialMonitorInterface.print(sendBuffer[sentLength]);
+        SerialMonitorInterface.print(" char> ");
+        SerialMonitorInterface.print((char)sendBuffer[sentLength]);
+        SerialMonitorInterface.println();
+*/
+        sendBufferTruncated[sendLength] = sendBuffer[sentLength];
+      }
+      sendLength++;
+      sentLength++;
+    }
+/*
+    SerialMonitorInterface.print("BUFFER-TRUNCATED: ");
+    for (int i = 0; i < sizeof(sendBufferTruncated); i++)
+    {
+      SerialMonitorInterface.print(sendBuffer[i]);
+    }
+    SerialMonitorInterface.println();
+*/
+    lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t *)sendBufferTruncated, sendLength);
+    SerialMonitorInterface.print("SENT> ");
+    SerialMonitorInterface.println((char *)sendBufferTruncated);
+  }
+
+  /*
+  while (sentLength < sizeSendBuffer+1)
+  {
+    int arraySize = buffer_size;
+    if ((sizeSendBuffer > sentLength) && ((sizeSendBuffer - sentLength) < (buffer_size)))
     {
       arraySize = (sizeSendBuffer - sentLength);
     }
+    SerialMonitorInterface.print("SIZE> ");
+    SerialMonitorInterface.print(arraySize);
+    SerialMonitorInterface.print(" > ");
     uint8_t sendBufferTruncated[arraySize] = {};
 
     uint8_t sendLength = 0;
@@ -335,13 +417,12 @@ void sendMessage(String msg)
       sendLength++;
       sentLength++;
     }
-    sendBufferTruncated[sendLength] = '\0'; //Terminate string
-    sendLength++;
 
     lib_aci_send_data(PIPE_UART_OVER_BTLE_UART_TX_TX, (uint8_t *)sendBufferTruncated, sendLength);
+    SerialMonitorInterface.print("SENT> ");
+    SerialMonitorInterface.println((char *)sendBufferTruncated);
   }
-  SerialMonitorInterface.print("SENT> ");
-  SerialMonitorInterface.println(msg);
+  */
 }
 
 void displayAxis(float x, float y, float z)
@@ -356,6 +437,7 @@ void displayAxis(float x, float y, float z)
 
 void displayDegrees(float x, float y, float z)
 {
+
   /*
   //SerialMonitorInterface.print("x");
   SerialMonitorInterface.print(x * RTMATH_RAD_TO_DEGREE);
